@@ -1,69 +1,71 @@
-const express = require('express')
-const router = express.Router()
+// const asyncMiddleware = require('../middleware/async')
+const admin = require("../middleware/admin");
+const auth = require("../middleware/auth");
+const Joi = require("joi");
+const mongoose = require("mongoose");
+const express = require("express");
+const router = express.Router();
+const { Genre, validate } = require("../models/genre");
 
-const genres = [
-    { id: 1, name: "Action" },
-    { id: 2, name: "Horror" },
-    { id: 3, name: "Romance" },
-  ];
-
-router.get("/", (req, res) => {
+// router.get("/", async (req, res) => {
+//   try {
+//     const genres = await Genre.find().sort("name");
+//     res.send(genres);
+//   } catch (ex) {
+//     next(ex);
+//   }
+// });
+router.get("/", async (req, res) => {
+  throw new Error('Could not get Genres.')  // winston paketinden dolayı yazdık (console yazdı)
+    const genres = await Genre.find().sort("name");
     res.send(genres);
-  });
-  
+   
+});
+// router.get("/", asyncMiddleware(async (req, res) => {  // yukardaki kodu bir fonksiyon yazarak içine olduk.Fonksiyonu başka bir componente yazdık
  
-  
-  
-  router.post("/", (req, res) => {
-      const { error } = validateGenre(req.body);
-  
-      if (error)  return res.status(400).send(error.details[0].message);
-      
-    const genre = {
-      id: genres.length + 1,
-      name: req.body.name,
-    };
-    genres.push(genre);
-    res.send(genre);
+//     const genres = await Genre.find().sort("name");
+//     res.send(genres); 
+   
+// }));
+
+router.post("/", auth, async (req, res) => {
+  // yazdığımız auth middleware func ile ancak yetkisi olanın yapabilmesini sağlıyoruz
+  const { error } = validate(req.body);
+  if (error) return res.status(400).send(error.details[0].message);
+
+  let genre = new Genre({ name: req.body.name });
+  genre = await genre.save();
+
+  res.send(genre);
+});
+
+router.put("/:id", async (req, res) => {
+  const { error } = validate(req.body);
+  if (error) return res.status(400).send(error.details[0].message);
+
+  const genre = await Genre.findByIdAndUpdate(req.params.id, {
+    name: req.body.name,
+    new: true,
   });
-  
-  router.put("/:id", (req, res) => {
-    const genre = genres.find((c) => c.id === parseInt(req.params.id));
-    if (!genre) {res.status(404).send("The course with the given ID not found");
-  return
-  } 
-  
-    // const result = validateCourse(req.body)
-    const { error } = validateGenre(req.body);
-  
-    if (error) return res.status(400).send(error.details[0].message);
-      
-    
-  
-    genre.name = req.body.name;
-    res.send(genre);
-  });
-  
-  router.delete('/:id',(req,res) => {
-      const genre = genres.find(c=>c.id === parseInt(req.params.id))
-      if(!genre) return res.status(404).send("The course with the given ID not found")
-  
-      const index = genres.indexOf(genre)
-      genres.slice(index,1)
-      res.send(genre)
-  })
-  
-  router.get("/:id", (req, res) => {
-    const genre = genres.find((c) => c.id === parseInt(req.params.id));
-    if (!genre) return res.status(404).send("Not found");
-    res.send(genre);
-  });
-  
-  function validateGenre(genre) {
-    const schema = {
-      name: Joi.string().min(3).required(),
-    };
-    
-    return Joi.validate(genre, schema);
+
+  if (!genre) {
+    res.status(404).send("The course with the given ID not found");
+    return;
   }
-  module.exports = router
+  res.send(genre);
+});
+
+router.delete("/:id", [auth, admin], async (req, res) => {
+  const genre = await Genre.findByIdAndRemove(req.params.id);
+  if (!genre)
+    return res.status(404).send("The course with the given ID not found");
+  res.send(genre);
+});
+
+router.get("/:id", async (req, res) => {
+  const genre = await Genre.findById(req.params.id);
+  if (!genre) return res.status(404).send("Not found");
+  res.send(genre);
+});
+
+module.exports = router;
